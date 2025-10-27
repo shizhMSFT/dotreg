@@ -91,7 +91,7 @@ public class UploadEndpointTests
     }
 
     [Fact]
-    public async Task CompleteUpload_DigestMismatch_ThrowsDigestMismatchException()
+    public async Task CompleteUpload_DigestMismatch_ReturnsBadRequest()
     {
         // Arrange
         var repository = "myapp";
@@ -106,10 +106,12 @@ public class UploadEndpointTests
         controller.Request.ContentLength = 0;
 
         // Act
-        Func<Task> act = async () => await controller.CompleteUpload(repository, sessionId, digest);
+        var result = await controller.CompleteUpload(repository, sessionId, digest);
 
         // Assert
-        await act.Should().ThrowAsync<DigestMismatchException>();
+        result.Should().BeOfType<BadRequestObjectResult>();
+        var badRequest = result as BadRequestObjectResult;
+        badRequest!.Value.Should().BeOfType<Dotreg.Api.Models.OciErrorResponse>();
     }
 
     [Fact]

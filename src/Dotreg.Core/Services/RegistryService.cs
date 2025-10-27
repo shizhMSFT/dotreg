@@ -154,5 +154,37 @@ public class RegistryService : IRegistryService
 
         var key = $"blobs/{name}/{digest}";
         return await _storage.ExistsAsync(key, cancellationToken);
+}
+
+    public async Task<string> PutManifestAsync(string name, string reference, byte[] content, string contentType, CancellationToken cancellationToken = default)
+    {
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Calculate digest
+        var digest = DigestValidator.CalculateSha256(content);
+
+        // Store manifest by digest
+        var manifestKey = $"manifests/{name}/{digest}";
+        await _storage.PutAsync(manifestKey, content, contentType, cancellationToken);
+
+        // If reference is a tag (not a digest), create/update tag file
+        if (!reference.StartsWith("sha256:", StringComparison.Ordinal))
+        {
+            if (!NameValidator.IsValidTagName(reference))
+            {
+                throw new InvalidNameException(reference, "Invalid tag name format");
+            }
+
+            var tagKey = $"tags/{name}/{reference}";
+            var tagContent = System.Text.Encoding.UTF8.GetBytes(digest);
+            await _storage.PutAsync(tagKey, tagContent, "text/plain", cancellationToken);
+        }
+
+        return digest;
     }
+
 }

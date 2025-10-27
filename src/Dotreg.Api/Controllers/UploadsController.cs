@@ -62,37 +62,99 @@ public class UploadsController : ControllerBase
         var contentRange = Request.Headers["Content-Range"].ToString();
         var contentLength = Request.ContentLength ?? 0;
 
+        if (contentLength == 0)
+        {
+            _logger.LogWarning(
+                "Empty chunk upload attempt for repository: {Repository}, SessionId: {SessionId}",
+                name,
+                uuid);
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.BlobUploadInvalid,
+                        Message = "Content-Length is required and must be greater than 0"
+                    }
+                }
+            });
+        }
+
         _logger.LogInformation(
-            "Uploading chunk for repository: {Repository}, SessionId: {SessionId}, Size: {Size}",
+            "Uploading chunk for repository: {Repository}, SessionId: {SessionId}, Size: {Size}, Range: {Range}",
             name,
             uuid,
-            contentLength);
+            contentLength,
+            contentRange);
 
         // Parse Content-Range header (e.g., "0-4" means bytes 0 through 4)
         long startByte = 0;
+        long endByte = -1;
         if (!string.IsNullOrEmpty(contentRange))
         {
             var parts = contentRange.Split('-');
-            if (parts.Length == 2 && long.TryParse(parts[0], out var start))
+            if (parts.Length == 2 && long.TryParse(parts[0], out var start) && long.TryParse(parts[1], out var end))
             {
                 startByte = start;
+                endByte = end;
+
+                // Validate that the range matches content length
+                var expectedLength = endByte - startByte + 1;
+                if (expectedLength != contentLength)
+                {
+                    _logger.LogWarning(
+                        "Content-Range mismatch for repository: {Repository}, SessionId: {SessionId}, Expected: {Expected}, Actual: {Actual}",
+                        name,
+                        uuid,
+                        expectedLength,
+                        contentLength);
+                    return BadRequest(new Models.OciErrorResponse
+                    {
+                        Errors = new List<Models.ErrorDetail>
+                        {
+                            new Models.ErrorDetail
+                            {
+                                Code = Models.OciErrorCodes.BlobUploadInvalid,
+                                Message = $"Content-Range ({contentRange}) does not match Content-Length ({contentLength})"
+                            }
+                        }
+                    });
+                }
             }
         }
 
-        var uploadedBytes = await _uploadSessionManager.UploadChunkAsync(
-            uuid,
-            Request.Body,
-            startByte,
-            contentLength,
-            cancellationToken);
+        try
+        {
+            var uploadedBytes = await _uploadSessionManager.UploadChunkAsync(
+                uuid,
+                Request.Body,
+                startByte,
+                contentLength,
+                cancellationToken);
 
-        var location = $"{Request.Scheme}://{Request.Host}/v2/{name}/blobs/uploads/{uuid}";
+            var location = $"{Request.Scheme}://{Request.Host}/v2/{name}/blobs/uploads/{uuid}";
 
-        Response.Headers["Location"] = location;
-        Response.Headers["Range"] = $"0-{uploadedBytes - 1}";
-        Response.Headers["Docker-Upload-UUID"] = uuid.ToString();
+            Response.Headers["Location"] = location;
+            Response.Headers["Range"] = $"0-{uploadedBytes - 1}";
+            Response.Headers["Docker-Upload-UUID"] = uuid.ToString();
 
-        return Accepted();
+            _logger.LogInformation(
+                "Chunk uploaded successfully for repository: {Repository}, SessionId: {SessionId}, TotalUploaded: {TotalUploaded}",
+                name,
+                uuid,
+                uploadedBytes);
+
+            return Accepted();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to upload chunk for repository: {Repository}, SessionId: {SessionId}",
+                name,
+                uuid);
+            throw;
+        }
     }
 
     /// <summary>
@@ -106,6 +168,25 @@ public class UploadsController : ControllerBase
         [FromQuery(Name = "digest")] string digest,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(digest))
+        {
+            _logger.LogWarning(
+                "Complete upload called without digest for repository: {Repository}, SessionId: {SessionId}",
+                name,
+                uuid);
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.DigestInvalid,
+                        Message = "Digest query parameter is required"
+                    }
+                }
+            });
+        }
+
         _logger.LogInformation(
             "Completing upload for repository: {Repository}, SessionId: {SessionId}, Digest: {Digest}",
             name,
@@ -118,23 +199,74 @@ public class UploadsController : ControllerBase
             finalChunk = Request.Body;
         }
 
-        var validatedDigest = await _uploadSessionManager.CompleteUploadAsync(
-            uuid,
-            digest,
-            finalChunk,
-            cancellationToken);
+        try
+        {
+            var validatedDigest = await _uploadSessionManager.CompleteUploadAsync(
+                uuid,
+                digest,
+                finalChunk,
+                cancellationToken);
 
-        var location = $"{Request.Scheme}://{Request.Host}/v2/{name}/blobs/{validatedDigest}";
+            var location = $"{Request.Scheme}://{Request.Host}/v2/{name}/blobs/{validatedDigest}";
 
-        Response.Headers["Location"] = location;
-        Response.Headers["Docker-Content-Digest"] = validatedDigest;
+            Response.Headers["Location"] = location;
+            Response.Headers["Docker-Content-Digest"] = validatedDigest;
 
-        _logger.LogInformation(
-            "Upload completed for repository: {Repository}, Digest: {Digest}",
-            name,
-            validatedDigest);
+            _logger.LogInformation(
+                "Upload completed successfully for repository: {Repository}, SessionId: {SessionId}, Digest: {Digest}",
+                name,
+                uuid,
+                validatedDigest);
 
-        return Created(location, null);
+            return Created(location, null);
+        }
+        catch (Core.Exceptions.DigestMismatchException ex)
+        {
+            _logger.LogWarning(ex,
+                "Digest mismatch for repository: {Repository}, SessionId: {SessionId}, Expected: {Expected}, Actual: {Actual}",
+                name,
+                uuid,
+                digest,
+                ex.Message);
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.DigestInvalid,
+                        Message = ex.Message,
+                        Detail = "The uploaded content does not match the provided digest"
+                    }
+                }
+            });
+        }
+        catch (Core.Exceptions.UploadSessionNotFoundException ex)
+        {
+            _logger.LogWarning(ex,
+                "Upload session not found for repository: {Repository}, SessionId: {SessionId}",
+                name,
+                uuid);
+            return NotFound(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.BlobUploadUnknown,
+                        Message = $"Upload session {uuid} not found"
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to complete upload for repository: {Repository}, SessionId: {SessionId}",
+                name,
+                uuid);
+            throw;
+        }
     }
 
     /// <summary>

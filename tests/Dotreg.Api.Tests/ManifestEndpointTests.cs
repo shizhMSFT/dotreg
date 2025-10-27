@@ -4,6 +4,7 @@ using Dotreg.Core.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -18,7 +19,17 @@ public class ManifestEndpointTests
     private static ManifestsController CreateController(IRegistryService service)
     {
         var mockLogger = new Mock<ILogger<ManifestsController>>();
-        var controller = new ManifestsController(service, mockLogger.Object)
+        
+        // Create in-memory configuration
+        var configDict = new Dictionary<string, string?>
+        {
+            { "Registry:MaxManifestSizeBytes", "4194304" }
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configDict)
+            .Build();
+        
+        var controller = new ManifestsController(service, mockLogger.Object, configuration)
         {
             ControllerContext = new ControllerContext
             {
@@ -104,5 +115,62 @@ public class ManifestEndpointTests
 
         // Assert
         result.Should().BeOfType<OkResult>();
+}
+    [Fact]
+    public async Task PutManifest_WithValidTag_ShouldReturn201Created()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        var manifestContent = """{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}"""u8.ToArray();
+        var digest = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        
+        mockService.Setup(s => s.PutManifestAsync(
+            "library/nginx",
+            "latest",
+            It.IsAny<byte[]>(),
+            "application/vnd.oci.image.manifest.v1+json",
+            default))
+            .ReturnsAsync(digest);
+        
+        var controller = CreateController(mockService.Object);
+        controller.Request.ContentType = "application/vnd.oci.image.manifest.v1+json";
+        controller.Request.Body = new MemoryStream(manifestContent);
+        controller.Request.ContentLength = manifestContent.Length;
+
+        // Act
+        var result = await controller.PutManifest("library/nginx", "latest");
+
+        // Assert
+        result.Should().BeOfType<CreatedResult>();
+        var createdResult = (CreatedResult)result;
+        createdResult.StatusCode.Should().Be(201);
+    }
+
+    [Fact]
+    public async Task PutManifest_WithDigestReference_ShouldReturn201Created()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        var manifestContent = """{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}"""u8.ToArray();
+        var digest = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        
+        mockService.Setup(s => s.PutManifestAsync(
+            "library/nginx",
+            digest,
+            It.IsAny<byte[]>(),
+            "application/vnd.oci.image.manifest.v1+json",
+            default))
+            .ReturnsAsync(digest);
+        
+        var controller = CreateController(mockService.Object);
+        controller.Request.ContentType = "application/vnd.oci.image.manifest.v1+json";
+        controller.Request.Body = new MemoryStream(manifestContent);
+        controller.Request.ContentLength = manifestContent.Length;
+
+        // Act
+        var result = await controller.PutManifest("library/nginx", digest);
+
+        // Assert
+        result.Should().BeOfType<CreatedResult>();
     }
 }

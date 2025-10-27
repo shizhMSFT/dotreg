@@ -48,4 +48,16 @@ public interface IRegistryService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if blob exists, false otherwise</returns>
     Task<bool> CheckBlobExistsAsync(string name, string digest, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores a manifest with the given reference (tag or digest)
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="reference">Tag name or digest</param>
+    /// <param name="content">Manifest content bytes</param>
+    /// <param name="contentType">Content type (e.g., application/vnd.oci.image.manifest.v1+json)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The calculated digest of the manifest</returns>
+    Task<string> PutManifestAsync(string name, string reference, byte[] content, string contentType, CancellationToken cancellationToken = default);
+
 }
