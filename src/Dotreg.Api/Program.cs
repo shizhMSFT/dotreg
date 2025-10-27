@@ -34,6 +34,9 @@ builder.Services.AddSingleton<IAmazonS3>(sp =>
 // Register storage service
 builder.Services.AddSingleton<IStorageService, S3StorageProvider>();
 
+// Register upload session manager
+builder.Services.AddScoped<IUploadSessionManager, UploadSessionManager>();
+
 // Register registry service
 builder.Services.AddScoped<IRegistryService, RegistryService>();
 

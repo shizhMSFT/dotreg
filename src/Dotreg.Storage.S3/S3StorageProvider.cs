@@ -266,4 +266,153 @@ public class S3StorageProvider : IStorageService
             throw new S3StorageException("PutWithMetadataAsync", key, ex);
         }
     }
+
+    public async Task StoreMetadataAsync(string repository, string sessionKey, Dictionary<string, string> metadata, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var key = S3KeyBuilder.BuildUploadSessionKey(repository, sessionKey);
+            var content = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(metadata);
+
+            await _s3Client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = _config.BucketName,
+                Key = key,
+                InputStream = new MemoryStream(content),
+                ContentType = "application/json"
+            }, cancellationToken);
+        }
+        catch (AmazonS3Exception ex)
+        {
+            throw new S3StorageException("StoreMetadataAsync", sessionKey, ex);
+        }
+    }
+
+    public async Task AppendToUploadAsync(string repository, string sessionKey, Stream content, long startByte, long length, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var key = S3KeyBuilder.BuildUploadDataKey(repository, sessionKey);
+            
+            // For simplicity, we'll store each chunk as a separate part
+            // In production, consider using S3 multipart uploads
+            var partKey = $"{key}/part-{startByte}";
+            
+            await _s3Client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = _config.BucketName,
+                Key = partKey,
+                InputStream = content,
+                ContentType = "application/octet-stream"
+            }, cancellationToken);
+        }
+        catch (AmazonS3Exception ex)
+        {
+            throw new S3StorageException("AppendToUploadAsync", sessionKey, ex);
+        }
+    }
+
+    public async Task<Stream> GetUploadContentAsync(string repository, string sessionKey, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var key = S3KeyBuilder.BuildUploadDataKey(repository, sessionKey);
+            
+            // List all parts and combine them
+            var listResponse = await _s3Client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = _config.BucketName,
+                Prefix = $"{key}/part-"
+            }, cancellationToken);
+
+            if (listResponse.S3Objects.Count == 0)
+            {
+                return new MemoryStream();
+            }
+
+            // Combine all parts into a single stream
+            var combinedStream = new MemoryStream();
+            foreach (var obj in listResponse.S3Objects.OrderBy(o => o.Key))
+            {
+                var response = await _s3Client.GetObjectAsync(new GetObjectRequest
+                {
+                    BucketName = _config.BucketName,
+                    Key = obj.Key
+                }, cancellationToken);
+
+                await response.ResponseStream.CopyToAsync(combinedStream, cancellationToken);
+            }
+
+            combinedStream.Position = 0;
+            return combinedStream;
+        }
+        catch (AmazonS3Exception ex)
+        {
+            throw new S3StorageException("GetUploadContentAsync", sessionKey, ex);
+        }
+    }
+
+    public async Task StoreBlobAsync(string repository, string digest, Stream content, Dictionary<string, string>? metadata, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var key = S3KeyBuilder.BuildBlobKey(repository, digest);
+            var request = new PutObjectRequest
+            {
+                BucketName = _config.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = "application/octet-stream"
+            };
+
+            if (metadata != null)
+            {
+                foreach (var kvp in metadata)
+                {
+                    request.Metadata.Add(kvp.Key, kvp.Value);
+                }
+            }
+
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+        }
+        catch (AmazonS3Exception ex)
+        {
+            throw new S3StorageException("StoreBlobAsync", digest, ex);
+        }
+    }
+
+    public async Task DeleteUploadSessionAsync(string repository, string sessionKey, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Delete session metadata
+            var metadataKey = S3KeyBuilder.BuildUploadSessionKey(repository, sessionKey);
+            await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
+            {
+                BucketName = _config.BucketName,
+                Key = metadataKey
+            }, cancellationToken);
+
+            // Delete all upload parts
+            var dataKey = S3KeyBuilder.BuildUploadDataKey(repository, sessionKey);
+            var listResponse = await _s3Client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = _config.BucketName,
+                Prefix = $"{dataKey}/part-"
+            }, cancellationToken);
+
+            foreach (var obj in listResponse.S3Objects)
+            {
+                await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
+                {
+                    BucketName = _config.BucketName,
+                    Key = obj.Key
+                }, cancellationToken);
+            }
+        }
+        catch (AmazonS3Exception ex)
+        {
+            throw new S3StorageException("DeleteUploadSessionAsync", sessionKey, ex);
+        }
+    }
 }

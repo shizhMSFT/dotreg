@@ -59,4 +59,29 @@ public interface IStorageService
     /// Puts an object with metadata.
     /// </summary>
     Task PutWithMetadataAsync(string key, byte[] content, string? contentType, Dictionary<string, string>? metadata, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores metadata for an upload session.
+    /// </summary>
+    Task StoreMetadataAsync(string repository, string sessionKey, Dictionary<string, string> metadata, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends data to an ongoing upload.
+    /// </summary>
+    Task AppendToUploadAsync(string repository, string sessionKey, Stream content, long startByte, long length, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the content of an ongoing upload.
+    /// </summary>
+    Task<Stream> GetUploadContentAsync(string repository, string sessionKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores a completed blob with metadata.
+    /// </summary>
+    Task StoreBlobAsync(string repository, string digest, Stream content, Dictionary<string, string>? metadata, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes an upload session.
+    /// </summary>
+    Task DeleteUploadSessionAsync(string repository, string sessionKey, CancellationToken cancellationToken = default);
 }

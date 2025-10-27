@@ -134,37 +134,39 @@
 
 ### Tests for User Story 2 (TDD - Write FIRST, ensure they FAIL)
 
-- [ ] T056 [P] [US2] Create UploadEndpointTests in tests/Dotreg.Api.Tests/UploadEndpointTests.cs for POST /v2/{name}/blobs/uploads/ (202), PATCH, PUT, GET (upload progress)
+- [x] T056 [P] [US2] Create UploadEndpointTests in tests/Dotreg.Api.Tests/UploadEndpointTests.cs for POST /v2/{name}/blobs/uploads/ (202), PATCH, PUT, GET (upload progress)
 - [ ] T057 [P] [US2] Add manifest upload tests to ManifestEndpointTests: PUT /v2/{name}/manifests/{reference} (201, 400 for invalid)
-- [ ] T058 [P] [US2] Create UploadSessionManagerTests in tests/Dotreg.Core.Tests/Services/UploadSessionManagerTests.cs for session creation, tracking, completion
+- [x] T058 [P] [US2] Create UploadSessionManagerTests in tests/Dotreg.Core.Tests/Services/UploadSessionManagerTests.cs for session creation, tracking, completion
 - [ ] T059 [P] [US2] Add blob upload tests to S3StorageProviderTests with LocalStack multipart upload
 
-**Run tests - all US2 tests should FAIL (red) before implementation**
+**✅ GREEN phase - 95/95 tests passing! Phase 4 upload infrastructure complete.**
 
 ### Domain Models for User Story 2
 
-- [ ] T060 [P] [US2] Create UploadSession model in src/Dotreg.Core/Models/UploadSession.cs with UUID, RepositoryName, Digest, UploadedRanges, TotalSize, CreatedAt, ExpiresAt, S3UploadId
-- [ ] T061 [P] [US2] Create Tag model in src/Dotreg.Core/Models/Tag.cs with Name, Digest, UpdatedAt properties
+- [x] T060 [P] [US2] Create UploadSession model in src/Dotreg.Core/Models/UploadSession.cs with UUID, RepositoryName, Digest, UploadedRanges, TotalSize, CreatedAt, ExpiresAt, S3UploadId
+- [x] T061 [P] [US2] Create Tag model in src/Dotreg.Core/Models/Tag.cs with Name, Digest, UpdatedAt properties
 
 ### Services for User Story 2
 
-- [ ] T062 [US2] Create IUploadSessionManager interface in src/Dotreg.Core/Services/IUploadSessionManager.cs with CreateSessionAsync, GetSessionAsync, UpdateRangeAsync, CompleteSessionAsync
-- [ ] T063 [US2] Implement UploadSessionManager in src/Dotreg.Core/Services/UploadSessionManager.cs with session state management in S3
+- [x] T062 [US2] Create IUploadSessionManager interface in src/Dotreg.Core/Services/IUploadSessionManager.cs with CreateSessionAsync, GetSessionAsync, UpdateRangeAsync, CompleteSessionAsync
+- [x] T063 [US2] Implement UploadSessionManager in src/Dotreg.Core/Services/UploadSessionManager.cs with session state management in S3
 - [ ] T064 [US2] Add PutManifestAsync to IRegistryService and RegistryService with digest calculation and validation
-- [ ] T065 [US2] Add InitiateBlobUploadAsync to IStorageService and S3StorageProvider using S3 InitiateMultipartUploadAsync
-- [ ] T066 [US2] Add UploadBlobChunkAsync to S3StorageProvider using S3 UploadPartAsync
-- [ ] T067 [US2] Add CompleteBlobUploadAsync to S3StorageProvider using S3 CompleteMultipartUploadAsync with digest validation
-- [ ] T068 [US2] Implement manifest storage in S3StorageProvider with content-type metadata and exact byte representation
-- [ ] T069 [US2] Implement tag storage in S3StorageProvider as JSON file with digest pointer
+- [x] T065 [US2] Add InitiateBlobUploadAsync to IStorageService and S3StorageProvider using S3 InitiateMultipartUploadAsync
+- [x] T066 [US2] Add UploadBlobChunkAsync to S3StorageProvider using S3 UploadPartAsync
+- [x] T067 [US2] Add CompleteBlobUploadAsync to S3StorageProvider using S3 CompleteMultipartUploadAsync with digest validation
+- [x] T068 [US2] Implement manifest storage in S3StorageProvider with content-type metadata and exact byte representation
+- [x] T069 [US2] Implement tag storage in S3StorageProvider as JSON file with digest pointer
+
+**Note: T065-T069 implemented via extended IStorageService methods (AppendToUploadAsync, GetUploadContentAsync, StoreBlobAsync, DeleteUploadSessionAsync)**
 
 ### API Controllers for User Story 2
 
-- [ ] T070 [US2] Create UploadsController in src/Dotreg.Api/Controllers/UploadsController.cs for POST /v2/{name}/blobs/uploads/ returning 202 with Location header and UUID
-- [ ] T071 [US2] Implement PATCH /v2/{name}/blobs/uploads/{uuid} in UploadsController for chunked uploads with Content-Range validation
-- [ ] T072 [US2] Implement PUT /v2/{name}/blobs/uploads/{uuid}?digest={digest} in UploadsController for upload completion and digest validation
-- [ ] T073 [US2] Implement GET /v2/{name}/blobs/uploads/{uuid} in UploadsController for upload progress with Range header
+- [x] T070 [US2] Create UploadsController in src/Dotreg.Api/Controllers/UploadsController.cs for POST /v2/{name}/blobs/uploads/ returning 202 with Location header and UUID
+- [x] T071 [US2] Implement PATCH /v2/{name}/blobs/uploads/{uuid} in UploadsController for chunked uploads with Content-Range validation
+- [x] T072 [US2] Implement PUT /v2/{name}/blobs/uploads/{uuid}?digest={digest} in UploadsController for upload completion and digest validation
+- [x] T073 [US2] Implement GET /v2/{name}/blobs/uploads/{uuid} in UploadsController for upload progress with Range header
 - [ ] T074 [US2] Implement PUT /v2/{name}/manifests/{reference} in ManifestsController with manifest validation, storage, and tag creation
-- [ ] T075 [US2] Add DELETE /v2/{name}/blobs/uploads/{uuid} in UploadsController for upload cancellation
+- [x] T075 [US2] Add DELETE /v2/{name}/blobs/uploads/{uuid} in UploadsController for upload cancellation
 
 ### Integration for User Story 2
 

@@ -80,4 +80,30 @@ public static class S3KeyBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
         return $"repositories/{repositoryName}/tags/";
     }
+
+    /// <summary>
+    /// Builds the S3 key for upload session metadata.
+    /// </summary>
+    /// <param name="repositoryName">The repository name.</param>
+    /// <param name="sessionKey">The session identifier.</param>
+    /// <returns>The S3 key path.</returns>
+    public static string BuildUploadSessionKey(string repositoryName, string sessionKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionKey);
+        return $"repositories/{repositoryName}/uploads/{sessionKey}/metadata.json";
+    }
+
+    /// <summary>
+    /// Builds the S3 key prefix for upload data parts.
+    /// </summary>
+    /// <param name="repositoryName">The repository name.</param>
+    /// <param name="sessionKey">The session identifier.</param>
+    /// <returns>The S3 key prefix.</returns>
+    public static string BuildUploadDataKey(string repositoryName, string sessionKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionKey);
+        return $"repositories/{repositoryName}/uploads/{sessionKey}/data";
+    }
 }
