@@ -108,6 +108,24 @@ public class BlobsController : ControllerBase
         
         try
         {
+            var exists = await _registryService.CheckBlobExistsAsync(name, digest, cancellationToken);
+
+            if (!exists)
+            {
+                return NotFound(new Models.OciErrorResponse
+                {
+                    Errors = new List<Models.ErrorDetail>
+                    {
+                        new Models.ErrorDetail
+                        {
+                            Code = Models.OciErrorCodes.BlobUnknown,
+                            Message = $"Blob not found: {name}@{digest}"
+                        }
+                    }
+                });
+            }
+
+            // Get blob info without downloading content
             var blob = await _registryService.GetBlobAsync(name, digest, cancellationToken);
 
             // Set OCI headers

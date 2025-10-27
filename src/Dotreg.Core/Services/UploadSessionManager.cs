@@ -116,15 +116,24 @@ public class UploadSessionManager : IUploadSessionManager
         var session = await GetSessionAsync(sessionId, cancellationToken);
 
         // If there's a final chunk, append it first
-        if (finalChunk != null && finalChunk.Length > 0)
+        if (finalChunk != null)
         {
-            await _storage.AppendToUploadAsync(
-                session.Repository,
-                sessionId.ToString(),
-                finalChunk,
-                session.UploadedBytes,
-                finalChunk.Length,
-                cancellationToken);
+            // HTTP request streams don't support Length property, so we need to read into a memory stream
+            using var memoryStream = new MemoryStream();
+            await finalChunk.CopyToAsync(memoryStream, cancellationToken);
+            var chunkSize = memoryStream.Length;
+            
+            if (chunkSize > 0)
+            {
+                memoryStream.Position = 0;
+                await _storage.AppendToUploadAsync(
+                    session.Repository,
+                    sessionId.ToString(),
+                    memoryStream,
+                    session.UploadedBytes,
+                    chunkSize,
+                    cancellationToken);
+            }
         }
 
         // Get the complete upload content

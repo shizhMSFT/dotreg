@@ -74,7 +74,14 @@ public class ReferrersController : ControllerBase
                 "Returning {Count} referrers for {Repository}/{Digest}",
                 imageIndex.Manifests.Count, name, digest);
 
-            return Ok(imageIndex);
+            // Serialize to JSON and return with exact OCI media type (no charset)
+            var json = System.Text.Json.JsonSerializer.Serialize(imageIndex, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
+            
+            return Content(json, "application/vnd.oci.image.index.v1+json");
         }
         catch (ArgumentException ex)
         {

@@ -87,8 +87,8 @@ public class RegistryService : IRegistryService
         // Validate digest format - this will throw ArgumentException if invalid
         DigestValidator.ValidateDigest(digest);
 
-        // Build storage key
-        var key = $"blobs/{name}/{digest}";
+        // Build storage key - this should match S3KeyBuilder.BuildBlobKey format
+        var key = $"repositories/{name}/blobs/{digest}";
 
         // Check if blob exists
         if (!await _storage.ExistsAsync(key, cancellationToken))
@@ -155,7 +155,7 @@ public class RegistryService : IRegistryService
             return false;
         }
 
-        var key = $"blobs/{name}/{digest}";
+        var key = $"repositories/{name}/blobs/{digest}";
         return await _storage.ExistsAsync(key, cancellationToken);
 }
 
@@ -277,7 +277,7 @@ public class RegistryService : IRegistryService
             throw new InvalidNameException(digest, "Invalid digest format");
         }
 
-        var key = $"blobs/{name}/{digest}";
+        var key = $"repositories/{name}/blobs/{digest}";
         
         if (!await _storage.ExistsAsync(key, cancellationToken))
         {
