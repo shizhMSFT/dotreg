@@ -1,0 +1,124 @@
+using Dotreg.Core.Exceptions;
+using Dotreg.Core.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dotreg.Api.Controllers;
+
+/// <summary>
+/// OCI blob endpoints for retrieving layers and configs
+/// GET /v2/{name}/blobs/{digest} - get blob by digest
+/// HEAD /v2/{name}/blobs/{digest} - check if blob exists
+/// Supports Range requests for partial downloads
+/// </summary>
+[ApiController]
+[Route("v2/{name}/blobs")]
+public class BlobsController : ControllerBase
+{
+    private readonly IRegistryService _registryService;
+
+    public BlobsController(IRegistryService registryService)
+    {
+        _registryService = registryService ?? throw new ArgumentNullException(nameof(registryService));
+    }
+
+    /// <summary>
+    /// Get a blob by digest
+    /// </summary>
+    /// <param name="name">Repository name (can contain slashes)</param>
+    /// <param name="digest">Blob digest (sha256:...)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    [HttpGet("{digest}")]
+    public async Task<IActionResult> GetBlob(string name, string digest, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var blob = await _registryService.GetBlobAsync(name, digest, cancellationToken);
+
+            // Set OCI headers
+            Response.Headers["Docker-Content-Digest"] = blob.Digest;
+            Response.Headers["Content-Length"] = blob.Size.ToString();
+
+            // Return stream with Range support
+            return File(blob.Content, blob.MediaType, enableRangeProcessing: true);
+        }
+        catch (BlobNotFoundException ex)
+        {
+            return NotFound(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.BlobUnknown,
+                        Message = ex.Message,
+                        Detail = $"Blob not found: {name}@{digest}"
+                    }
+                }
+            });
+        }
+        catch (InvalidNameException ex)
+        {
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.NameInvalid,
+                        Message = ex.Message
+                    }
+                }
+            });
+        }
+        catch (DigestMismatchException ex)
+        {
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.DigestInvalid,
+                        Message = ex.Message
+                    }
+                }
+            });
+        }
+    }
+
+    /// <summary>
+    /// Check if a blob exists (HEAD request)
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="digest">Blob digest</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    [HttpHead("{digest}")]
+    public async Task<IActionResult> HeadBlob(string name, string digest, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var blob = await _registryService.GetBlobAsync(name, digest, cancellationToken);
+
+            // Set OCI headers
+            Response.Headers["Docker-Content-Digest"] = blob.Digest;
+            Response.Headers["Content-Length"] = blob.Size.ToString();
+
+            // Dispose the stream since we don't need the content
+            await blob.Content.DisposeAsync();
+
+            return Ok();
+        }
+        catch (BlobNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (InvalidNameException)
+        {
+            return BadRequest();
+        }
+        catch (DigestMismatchException)
+        {
+            return BadRequest();
+        }
+    }
+}

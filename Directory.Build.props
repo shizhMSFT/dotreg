@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <!-- Common properties for all projects -->
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Version information -->
+    <Version>0.1.0</Version>
+    <Authors>dotreg contributors</Authors>
+    <Company>dotreg</Company>
+    <Product>dotreg</Product>
+    <Copyright>Copyright © 2025 dotreg contributors</Copyright>
+    
+    <!-- NuGet package properties (if publishing) -->
+    <PackageProjectUrl>https://github.com/shizhMSFT/dotreg</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/shizhMSFT/dotreg</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- Code analysis -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

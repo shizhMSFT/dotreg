@@ -1,0 +1,158 @@
+using Dotreg.Core.Exceptions;
+using Dotreg.Core.Models;
+using Dotreg.Core.Validation;
+
+namespace Dotreg.Core.Services;
+
+/// <summary>
+/// Implementation of IRegistryService using IStorageService
+/// </summary>
+public class RegistryService : IRegistryService
+{
+    private readonly IStorageService _storage;
+
+    public RegistryService(IStorageService storage)
+    {
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+    }
+
+    public async Task<Manifest> GetManifestAsync(string name, string reference, CancellationToken cancellationToken = default)
+    {
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Validate reference (tag or digest)
+        if (!NameValidator.IsValidTagName(reference) && !DigestValidator.IsValidDigest(reference))
+        {
+            throw new InvalidNameException(reference, "Invalid reference format");
+        }
+
+        // Build storage key
+        string key;
+        string manifestDigest;
+        
+        if (reference.StartsWith("sha256:", StringComparison.Ordinal))
+        {
+            // Direct digest reference
+            manifestDigest = reference;
+            key = $"manifests/{name}/{manifestDigest}";
+        }
+        else
+        {
+            // Tag reference - resolve to digest via tag file
+            key = $"tags/{name}/{reference}";
+            if (!await _storage.ExistsAsync(key, cancellationToken))
+            {
+                throw new ManifestNotFoundException(name, reference);
+            }
+            
+            // Read digest from tag file
+            var tagData = await _storage.GetAsync(key, cancellationToken);
+            manifestDigest = System.Text.Encoding.UTF8.GetString(tagData).Trim();
+            key = $"manifests/{name}/{manifestDigest}";
+        }
+
+        // Get manifest data
+        if (!await _storage.ExistsAsync(key, cancellationToken))
+        {
+            throw new ManifestNotFoundException(name, reference);
+        }
+
+        var content = await _storage.GetAsync(key, cancellationToken);
+        var contentType = await _storage.GetContentTypeAsync(key, cancellationToken);
+        var digest = DigestValidator.CalculateSha256(content);
+
+        return new Manifest
+        {
+            Digest = digest,
+            MediaType = contentType ?? "application/vnd.oci.image.manifest.v1+json",
+            Content = content
+        };
+    }
+
+    public async Task<Blob> GetBlobAsync(string name, string digest, CancellationToken cancellationToken = default)
+    {
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Validate digest format - this will throw ArgumentException if invalid
+        DigestValidator.ValidateDigest(digest);
+
+        // Build storage key
+        var key = $"blobs/{name}/{digest}";
+
+        // Check if blob exists
+        if (!await _storage.ExistsAsync(key, cancellationToken))
+        {
+            throw new BlobNotFoundException(name, digest);
+        }
+
+        // Get blob stream and metadata
+        var stream = await _storage.GetStreamAsync(key, cancellationToken);
+        var size = await _storage.GetSizeAsync(key, cancellationToken);
+
+        return new Blob
+        {
+            Digest = digest,
+            Size = size,
+            Content = stream,
+            MediaType = "application/octet-stream"
+        };
+    }
+
+    public async Task<bool> CheckManifestExistsAsync(string name, string reference, CancellationToken cancellationToken = default)
+    {
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            return false;
+        }
+
+        // Validate reference
+        if (!NameValidator.IsValidTagName(reference) && !DigestValidator.IsValidDigest(reference))
+        {
+            return false;
+        }
+
+        // Build storage key
+        string key;
+        if (reference.StartsWith("sha256:", StringComparison.Ordinal))
+        {
+            key = $"manifests/{name}/{reference}";
+        }
+        else
+        {
+            // Tag reference - check if tag exists
+            key = $"tags/{name}/{reference}";
+            if (!await _storage.ExistsAsync(key, cancellationToken))
+            {
+                return false;
+            }
+            
+            // Read digest and check manifest
+            var tagData = await _storage.GetAsync(key, cancellationToken);
+            var manifestDigest = System.Text.Encoding.UTF8.GetString(tagData).Trim();
+            key = $"manifests/{name}/{manifestDigest}";
+        }
+
+        return await _storage.ExistsAsync(key, cancellationToken);
+    }
+
+    public async Task<bool> CheckBlobExistsAsync(string name, string digest, CancellationToken cancellationToken = default)
+    {
+        // Validate repository name and digest
+        if (!NameValidator.IsValidRepositoryName(name) || !DigestValidator.IsValidDigest(digest))
+        {
+            return false;
+        }
+
+        var key = $"blobs/{name}/{digest}";
+        return await _storage.ExistsAsync(key, cancellationToken);
+    }
+}

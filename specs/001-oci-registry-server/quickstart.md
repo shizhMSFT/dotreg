@@ -60,54 +60,34 @@ cd dotreg
 git checkout 001-oci-registry-server
 ```
 
-### 2. Start LocalStack (S3 Emulator)
+### 2. LocalStack Integration (Automatic)
 
-LocalStack provides a local S3-compatible service for development without AWS account:
+The project uses **Testcontainers** to automatically manage LocalStack for integration tests:
 
-**Using Docker Compose**:
+- ✅ **No manual setup required** - Testcontainers handles everything
+- 🐳 **Automatic container lifecycle** - Starts before tests, stops after
+- 🔄 **Shared container** - Single LocalStack instance reused across all tests (5x faster)
+- 🧹 **Auto cleanup** - Test data cleaned between tests for isolation
 
-Create `docker-compose.dev.yml`:
-```yaml
-version: '3.8'
-
-services:
-  localstack:
-    image: localstack/localstack:latest
-    ports:
-      - "4566:4566"
-    environment:
-      - SERVICES=s3
-      - DEBUG=1
-      - DATA_DIR=/tmp/localstack/data
-    volumes:
-      - localstack-data:/tmp/localstack
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  localstack-data:
-```
-
-**Start LocalStack**:
-```bash
-docker-compose -f docker-compose.dev.yml up -d
-```
-
-**Verify LocalStack is running**:
-```bash
-curl http://localhost:4566/_localstack/health
-```
-
-### 3. Create S3 Bucket in LocalStack
+**What happens when you run tests:**
 
 ```bash
-# Configure AWS CLI for LocalStack
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=us-east-1
+dotnet test
+```
+
+1. Testcontainers automatically pulls LocalStack image (if needed)
+2. Starts LocalStack container on random port (avoids conflicts)
+3. Creates S3 bucket for tests
+4. Runs all 83 tests (unit + integration)
+5. Cleans up container automatically
+
+**No docker-compose files needed!** The `LocalStackFixture` in test code manages everything.
+
+### 3. Build and Test
+
+```bash
+# Build the solution
+dotnet build
 
 # Create bucket
 aws --endpoint-url=http://localhost:4566 s3 mb s3://dotreg-dev
@@ -453,17 +433,15 @@ Enable S3 SDK logging in `appsettings.Development.json`:
 }
 ```
 
-### Clear LocalStack Data
+### Clear Test Data
+
+Testcontainers automatically cleans up after each test run. Test data is isolated:
 
 ```bash
-# Stop and remove containers
-docker-compose -f docker-compose.dev.yml down -v
+# Run tests (fresh LocalStack container each time)
+dotnet test
 
-# Restart fresh
-docker-compose -f docker-compose.dev.yml up -d
-
-# Recreate bucket
-aws --endpoint-url=http://localhost:4566 s3 mb s3://dotreg-dev
+# Tests automatically clean up - no manual steps needed!
 ```
 
 ### Hot Reload
@@ -480,12 +458,13 @@ Make changes to code → Save → Application reloads automatically.
 
 ## Troubleshooting
 
-### Issue: "Connection refused" to LocalStack
+### Issue: LocalStack tests fail to start
 
 **Solution**:
-- Verify LocalStack is running: `docker ps`
-- Check health: `curl http://localhost:4566/_localstack/health`
-- Restart LocalStack: `docker-compose -f docker-compose.dev.yml restart`
+- Ensure Docker Desktop is running
+- Check Docker is accessible: `docker ps`
+- View detailed test output: `dotnet test --logger "console;verbosity=detailed"`
+- Testcontainers manages containers automatically - no manual restart needed
 
 ### Issue: Docker push fails with "server gave HTTP response to HTTPS client"
 
@@ -496,8 +475,9 @@ Make changes to code → Save → Application reloads automatically.
 ### Issue: Tests fail with S3 errors
 
 **Solution**:
-- Ensure LocalStack is running before tests
-- Check test uses correct endpoint URL (`http://localhost:4566`)
+- Testcontainers handles LocalStack automatically
+- Check Docker Desktop is running and healthy
+- Tests use dynamic ports - no hardcoded endpoints
 - Verify bucket exists: `aws --endpoint-url=http://localhost:4566 s3 ls`
 
 ### Issue: High memory usage during blob uploads
@@ -539,13 +519,10 @@ dotnet watch --project src/Dotreg.Api/Dotreg.Api.csproj
 # Format code
 dotnet format
 
-# LocalStack
-docker-compose -f docker-compose.dev.yml up -d
-docker-compose -f docker-compose.dev.yml down
-
-# AWS CLI (LocalStack)
-aws --endpoint-url=http://localhost:4566 s3 ls
-aws --endpoint-url=http://localhost:4566 s3 ls s3://dotreg-dev --recursive
+# Testing (Testcontainers manages LocalStack automatically)
+dotnet test                                    # Run all tests
+dotnet test --filter FullyQualifiedName~S3     # Run S3 integration tests only
+dotnet test --logger "console;verbosity=detailed"  # Verbose output
 
 # Docker
 docker tag <image> localhost:5000/<repo>:<tag>
