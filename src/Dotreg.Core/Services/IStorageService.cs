@@ -51,6 +51,11 @@ public interface IStorageService
     Task<List<string>> ListAsync(string prefix, int? maxResults = null, string? startAfter = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Lists object keys with the specified prefix.
+    /// </summary>
+    Task<List<string>> ListKeysAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets metadata for an object.
     /// </summary>
     Task<Dictionary<string, string>> GetMetadataAsync(string key, CancellationToken cancellationToken = default);

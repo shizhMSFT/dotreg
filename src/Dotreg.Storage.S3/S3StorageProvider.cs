@@ -210,6 +210,35 @@ public class S3StorageProvider : IStorageService
         }
     }
 
+    public async Task<List<string>> ListKeysAsync(string prefix, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var request = new ListObjectsV2Request
+            {
+                BucketName = _config.BucketName,
+                Prefix = prefix
+            };
+
+            var keys = new List<string>();
+            ListObjectsV2Response response;
+            
+            do
+            {
+                response = await _s3Client.ListObjectsV2Async(request, cancellationToken);
+                keys.AddRange(response.S3Objects.Select(o => o.Key));
+                request.ContinuationToken = response.NextContinuationToken;
+            }
+            while (response.IsTruncated == true);
+
+            return keys;
+        }
+        catch (AmazonS3Exception ex)
+        {
+            throw new S3StorageException("ListKeysAsync", prefix, ex);
+        }
+    }
+
     public async Task<Dictionary<string, string>> GetMetadataAsync(string key, CancellationToken cancellationToken = default)
     {
         try

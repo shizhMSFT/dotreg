@@ -187,4 +187,37 @@ public class RegistryService : IRegistryService
         return digest;
     }
 
+    public async Task<List<string>> ListTagsAsync(string name, int maxResults, string? startAfter, CancellationToken cancellationToken = default)
+    {
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // List all tag keys with the prefix
+        var prefix = $"tags/{name}/";
+        var keys = await _storage.ListKeysAsync(prefix, cancellationToken);
+
+        // Extract tag names from keys
+        var tags = keys
+            .Select(key => key.Substring(prefix.Length))
+            .OrderBy(tag => tag, StringComparer.Ordinal)
+            .ToList();
+
+        // Apply startAfter filter
+        if (!string.IsNullOrEmpty(startAfter))
+        {
+            tags = tags.Where(tag => string.CompareOrdinal(tag, startAfter) > 0).ToList();
+        }
+
+        // Apply maxResults limit
+        if (tags.Count > maxResults)
+        {
+            tags = tags.Take(maxResults).ToList();
+        }
+
+        return tags;
+    }
+
 }

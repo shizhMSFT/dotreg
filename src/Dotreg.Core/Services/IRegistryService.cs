@@ -60,4 +60,14 @@ public interface IRegistryService
     /// <returns>The calculated digest of the manifest</returns>
     Task<string> PutManifestAsync(string name, string reference, byte[] content, string contentType, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists all tags for a repository
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="maxResults">Maximum number of results to return</param>
+    /// <param name="startAfter">Tag name to start after (for pagination)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of tag names in lexical order</returns>
+    Task<List<string>> ListTagsAsync(string name, int maxResults, string? startAfter, CancellationToken cancellationToken = default);
+
 }
