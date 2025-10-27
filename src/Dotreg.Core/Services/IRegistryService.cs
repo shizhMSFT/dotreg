@@ -70,4 +70,24 @@ public interface IRegistryService
     /// <returns>List of tag names in lexical order</returns>
     Task<List<string>> ListTagsAsync(string name, int maxResults, string? startAfter, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Deletes a manifest by reference (digest only, not tag)
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="reference">Digest (must be sha256:...)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <exception cref="InvalidOperationException">When deletion is disabled in configuration</exception>
+    /// <exception cref="Exceptions.ManifestNotFoundException">Manifest not found</exception>
+    Task DeleteManifestAsync(string name, string reference, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a blob by digest
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="digest">Blob digest (must be sha256:...)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <exception cref="InvalidOperationException">When deletion is disabled in configuration</exception>
+    /// <exception cref="Exceptions.BlobNotFoundException">Blob not found</exception>
+    Task DeleteBlobAsync(string name, string digest, CancellationToken cancellationToken = default);
+
 }

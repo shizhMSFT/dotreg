@@ -1,6 +1,7 @@
 using Dotreg.Core.Exceptions;
 using Dotreg.Core.Models;
 using Dotreg.Core.Validation;
+using Microsoft.Extensions.Configuration;
 
 namespace Dotreg.Core.Services;
 
@@ -10,10 +11,12 @@ namespace Dotreg.Core.Services;
 public class RegistryService : IRegistryService
 {
     private readonly IStorageService _storage;
+    private readonly IConfiguration? _configuration;
 
-    public RegistryService(IStorageService storage)
+    public RegistryService(IStorageService storage, IConfiguration? configuration = null)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        _configuration = configuration;
     }
 
     public async Task<Manifest> GetManifestAsync(string name, string reference, CancellationToken cancellationToken = default)
@@ -218,6 +221,70 @@ public class RegistryService : IRegistryService
         }
 
         return tags;
+    }
+
+    public async Task DeleteManifestAsync(string name, string reference, CancellationToken cancellationToken = default)
+    {
+        // Check if deletion is enabled
+        var deletionEnabledStr = _configuration?["Registry:EnableDeletion"];
+        var deletionEnabled = !string.IsNullOrEmpty(deletionEnabledStr) && bool.Parse(deletionEnabledStr);
+        if (!deletionEnabled)
+        {
+            throw new InvalidOperationException("Manifest deletion is disabled. Set Registry:EnableDeletion to true to enable.");
+        }
+
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Validate reference - must be digest, not tag
+        if (!DigestValidator.IsValidDigest(reference))
+        {
+            throw new InvalidNameException(reference, "Deletion requires digest reference, not tag name");
+        }
+
+        var key = $"manifests/{name}/{reference}";
+        
+        if (!await _storage.ExistsAsync(key, cancellationToken))
+        {
+            throw new ManifestNotFoundException(name, reference);
+        }
+
+        await _storage.DeleteAsync(key, cancellationToken);
+    }
+
+    public async Task DeleteBlobAsync(string name, string digest, CancellationToken cancellationToken = default)
+    {
+        // Check if deletion is enabled
+        var deletionEnabledStr = _configuration?["Registry:EnableDeletion"];
+        var deletionEnabled = !string.IsNullOrEmpty(deletionEnabledStr) && bool.Parse(deletionEnabledStr);
+        if (!deletionEnabled)
+        {
+            throw new InvalidOperationException("Blob deletion is disabled. Set Registry:EnableDeletion to true to enable.");
+        }
+
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Validate digest
+        if (!DigestValidator.IsValidDigest(digest))
+        {
+            throw new InvalidNameException(digest, "Invalid digest format");
+        }
+
+        var key = $"blobs/{name}/{digest}";
+        
+        if (!await _storage.ExistsAsync(key, cancellationToken))
+        {
+            throw new BlobNotFoundException(name, digest);
+        }
+
+        await _storage.DeleteAsync(key, cancellationToken);
     }
 
 }

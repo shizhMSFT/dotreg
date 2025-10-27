@@ -173,4 +173,62 @@ public class ManifestEndpointTests
         // Assert
         result.Should().BeOfType<CreatedResult>();
     }
+
+    [Fact]
+    public async Task DeleteManifest_WithDigest_Returns202Accepted()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        mockService.Setup(s => s.DeleteManifestAsync("library/nginx", "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", default))
+            .Returns(Task.CompletedTask);
+        
+        var controller = CreateController(mockService.Object);
+        var name = "library/nginx";
+        var digest = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+
+        // Act
+        var result = await controller.DeleteManifest(name, digest);
+
+        // Assert
+        result.Should().BeOfType<AcceptedResult>();
+    }
+
+    [Fact]
+    public async Task DeleteManifest_WithNonExistentManifest_Returns404NotFound()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        mockService.Setup(s => s.DeleteManifestAsync("library/nginx", "sha256:notfound", default))
+            .ThrowsAsync(new Core.Exceptions.ManifestNotFoundException("library/nginx", "sha256:notfound"));
+        
+        var controller = CreateController(mockService.Object);
+        var name = "library/nginx";
+        var digest = "sha256:notfound";
+
+        // Act
+        var result = await controller.DeleteManifest(name, digest);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task DeleteManifest_WhenDeletionDisabled_Returns405MethodNotAllowed()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        mockService.Setup(s => s.DeleteManifestAsync("library/nginx", "sha256:abcdef", default))
+            .ThrowsAsync(new InvalidOperationException("Deletion is disabled"));
+        
+        var controller = CreateController(mockService.Object);
+        var name = "library/nginx";
+        var digest = "sha256:abcdef";
+
+        // Act
+        var result = await controller.DeleteManifest(name, digest);
+
+        // Assert
+        var objectResult = result.Should().BeOfType<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(405);
+    }
 }

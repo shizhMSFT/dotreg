@@ -81,4 +81,62 @@ public class BlobEndpointTests
         // Assert
         result.Should().BeOfType<OkResult>();
     }
+
+    [Fact]
+    public async Task DeleteBlob_WithValidDigest_Returns202Accepted()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        var digest = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        mockService.Setup(s => s.DeleteBlobAsync("library/nginx", digest, default))
+            .Returns(Task.CompletedTask);
+        
+        var controller = CreateController(mockService.Object);
+        var name = "library/nginx";
+
+        // Act
+        var result = await controller.DeleteBlob(name, digest);
+
+        // Assert
+        result.Should().BeOfType<AcceptedResult>();
+    }
+
+    [Fact]
+    public async Task DeleteBlob_WithNonExistentBlob_Returns404NotFound()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        var digest = "sha256:notfound";
+        mockService.Setup(s => s.DeleteBlobAsync("library/nginx", digest, default))
+            .ThrowsAsync(new Core.Exceptions.BlobNotFoundException("library/nginx", digest));
+        
+        var controller = CreateController(mockService.Object);
+        var name = "library/nginx";
+
+        // Act
+        var result = await controller.DeleteBlob(name, digest);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task DeleteBlob_WhenDeletionDisabled_Returns405MethodNotAllowed()
+    {
+        // Arrange
+        var mockService = new Mock<IRegistryService>();
+        var digest = "sha256:abcdef";
+        mockService.Setup(s => s.DeleteBlobAsync("library/nginx", digest, default))
+            .ThrowsAsync(new InvalidOperationException("Deletion is disabled"));
+        
+        var controller = CreateController(mockService.Object);
+        var name = "library/nginx";
+
+        // Act
+        var result = await controller.DeleteBlob(name, digest);
+
+        // Assert
+        var objectResult = result.Should().BeOfType<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(405);
+    }
 }

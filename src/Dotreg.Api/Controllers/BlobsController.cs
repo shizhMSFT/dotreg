@@ -132,4 +132,81 @@ public class BlobsController : ControllerBase
             return BadRequest();
         }
     }
+
+    /// <summary>
+    /// Delete a blob (DELETE request)
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="digest">Blob digest</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    [HttpDelete("{digest}")]
+    public async Task<IActionResult> DeleteBlob(string name, string digest, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting blob: {Repository}@{Digest}", name, digest);
+
+        try
+        {
+            await _registryService.DeleteBlobAsync(name, digest, cancellationToken);
+
+            _logger.LogInformation(
+                "Blob deleted successfully: {Repository}@{Digest}",
+                name, digest);
+
+            return Accepted();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Deletion disabled for blob: {Repository}@{Digest}", name, digest);
+            return new ObjectResult(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.Unsupported,
+                        Message = ex.Message,
+                        Detail = "Blob deletion is not enabled"
+                    }
+                }
+            })
+            {
+                StatusCode = 405 // Method Not Allowed
+            };
+        }
+        catch (BlobNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Blob not found for deletion: {Repository}@{Digest}", name, digest);
+            return NotFound(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.BlobUnknown,
+                        Message = ex.Message
+                    }
+                }
+            });
+        }
+        catch (InvalidNameException ex)
+        {
+            _logger.LogWarning(ex, "Invalid digest in blob deletion: {Repository}@{Digest}", name, digest);
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.NameInvalid,
+                        Message = ex.Message
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete blob: {Repository}@{Digest}", name, digest);
+            throw;
+        }
+    }
 }

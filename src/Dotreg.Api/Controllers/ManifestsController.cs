@@ -225,4 +225,81 @@ public class ManifestsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Delete a manifest (DELETE request)
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="reference">Digest (must be digest, not tag)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    [HttpDelete("{**reference}")]
+    public async Task<IActionResult> DeleteManifest(string name, string reference, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting manifest: {Repository}@{Reference}", name, reference);
+
+        try
+        {
+            await _registryService.DeleteManifestAsync(name, reference, cancellationToken);
+
+            _logger.LogInformation(
+                "Manifest deleted successfully: {Repository}@{Reference}",
+                name, reference);
+
+            return Accepted();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Deletion disabled for manifest: {Repository}@{Reference}", name, reference);
+            return new ObjectResult(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.Unsupported,
+                        Message = ex.Message,
+                        Detail = "Manifest deletion is not enabled"
+                    }
+                }
+            })
+            {
+                StatusCode = 405 // Method Not Allowed
+            };
+        }
+        catch (ManifestNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Manifest not found for deletion: {Repository}@{Reference}", name, reference);
+            return NotFound(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.ManifestUnknown,
+                        Message = ex.Message
+                    }
+                }
+            });
+        }
+        catch (InvalidNameException ex)
+        {
+            _logger.LogWarning(ex, "Invalid reference in manifest deletion: {Repository}@{Reference}", name, reference);
+            return BadRequest(new Models.OciErrorResponse
+            {
+                Errors = new List<Models.ErrorDetail>
+                {
+                    new Models.ErrorDetail
+                    {
+                        Code = Models.OciErrorCodes.NameInvalid,
+                        Message = ex.Message
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete manifest: {Repository}@{Reference}", name, reference);
+            throw;
+        }
+    }
+
 }
