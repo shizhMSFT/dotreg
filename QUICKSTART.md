@@ -10,7 +10,7 @@
 
 Edit `src/Dotreg.Api/appsettings.json`:
 
-```json
+```jsonc
 {
   "S3": {
     "BucketName": "your-bucket-name",

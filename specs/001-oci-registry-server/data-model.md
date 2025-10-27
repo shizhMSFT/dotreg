@@ -105,7 +105,7 @@ Repositories are **logical entities** - they don't have a dedicated S3 object. A
 **S3 Key**: `/repositories/{repository-name}/manifests/{digest}`
 
 **S3 Metadata**:
-```json
+```jsonc
 {
   "content-type": "application/vnd.oci.image.manifest.v1+json",
   "x-dotreg-size": "1234",

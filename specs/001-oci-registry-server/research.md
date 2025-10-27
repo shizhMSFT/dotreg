@@ -525,7 +525,7 @@ var s3Client = new AmazonS3Client(
 - Docker Compose for local development
 
 **Configuration Structure**:
-```json
+```jsonc
 {
   "S3": {
     "BucketName": "dotreg-storage",
