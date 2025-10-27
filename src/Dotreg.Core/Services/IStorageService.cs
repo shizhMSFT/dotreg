@@ -1,0 +1,92 @@
+namespace Dotreg.Core.Services;
+
+/// <summary>
+/// Interface for storage operations in the registry.
+/// </summary>
+public interface IStorageService
+{
+    /// <summary>
+    /// Checks if an object exists at the specified key.
+    /// </summary>
+    Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the size of an object in bytes.
+    /// </summary>
+    Task<long> GetSizeAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the content type of an object.
+    /// </summary>
+    Task<string?> GetContentTypeAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads an object as a byte array.
+    /// </summary>
+    Task<byte[]> GetAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads an object as a stream.
+    /// </summary>
+    Task<Stream> GetStreamAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes content to an object.
+    /// </summary>
+    Task PutAsync(string key, byte[] content, string? contentType = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes a stream to an object.
+    /// </summary>
+    Task PutStreamAsync(string key, Stream content, string? contentType = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes an object.
+    /// </summary>
+    Task DeleteAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists objects with the specified prefix.
+    /// </summary>
+    Task<List<string>> ListAsync(string prefix, int? maxResults = null, string? startAfter = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists object keys with the specified prefix.
+    /// </summary>
+    Task<List<string>> ListKeysAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets metadata for an object.
+    /// </summary>
+    Task<Dictionary<string, string>> GetMetadataAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Puts an object with metadata.
+    /// </summary>
+    Task PutWithMetadataAsync(string key, byte[] content, string? contentType, Dictionary<string, string>? metadata, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores metadata for an upload session.
+    /// </summary>
+    Task StoreMetadataAsync(string repository, string sessionKey, Dictionary<string, string> metadata, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends data to an ongoing upload.
+    /// </summary>
+    Task AppendToUploadAsync(string repository, string sessionKey, Stream content, long startByte, long length, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the content of an ongoing upload.
+    /// </summary>
+    Task<Stream> GetUploadContentAsync(string repository, string sessionKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores a completed blob with metadata.
+    /// </summary>
+    Task StoreBlobAsync(string repository, string digest, Stream content, Dictionary<string, string>? metadata, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes an upload session.
+    /// </summary>
+    Task DeleteUploadSessionAsync(string repository, string sessionKey, CancellationToken cancellationToken = default);
+}
