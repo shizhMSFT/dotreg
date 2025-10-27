@@ -90,4 +90,25 @@ public interface IRegistryService
     /// <exception cref="Exceptions.BlobNotFoundException">Blob not found</exception>
     Task DeleteBlobAsync(string name, string digest, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Gets the list of referrers (artifacts) that reference the given manifest
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="digest">Subject manifest digest</param>
+    /// <param name="artifactType">Optional filter by artifact type</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of referrer descriptors</returns>
+    /// <exception cref="InvalidOperationException">When referrers API is disabled in configuration</exception>
+    Task<List<ReferrerDescriptor>> GetReferrersAsync(string name, string digest, string? artifactType, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the referrers index to add a new referrer for a subject manifest
+    /// </summary>
+    /// <param name="name">Repository name</param>
+    /// <param name="subjectDigest">Subject manifest digest</param>
+    /// <param name="referrer">Referrer descriptor to add</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <exception cref="InvalidOperationException">When referrers API is disabled in configuration</exception>
+    Task UpdateReferrersIndexAsync(string name, string subjectDigest, ReferrerDescriptor referrer, CancellationToken cancellationToken = default);
+
 }

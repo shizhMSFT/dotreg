@@ -287,4 +287,156 @@ public class RegistryService : IRegistryService
         await _storage.DeleteAsync(key, cancellationToken);
     }
 
+    public async Task<List<ReferrerDescriptor>> GetReferrersAsync(string name, string digest, string? artifactType, CancellationToken cancellationToken = default)
+    {
+        // Check if referrers API is enabled
+        var enableReferrersApi = bool.Parse(_configuration?["Registry:EnableReferrersApi"] ?? "false");
+        if (!enableReferrersApi)
+        {
+            throw new InvalidOperationException("Referrers API is disabled. Enable it by setting Registry:EnableReferrersApi to true in configuration.");
+        }
+
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Validate digest format
+        DigestValidator.ValidateDigest(digest);
+
+        // Build storage key for referrers index
+        var key = $"referrers/{name}/{digest}/index.json";
+
+        // Check if referrers index exists
+        if (!await _storage.ExistsAsync(key, cancellationToken))
+        {
+            // No referrers - return empty list (not 404)
+            return new List<ReferrerDescriptor>();
+        }
+
+        // Read and parse referrers index
+        var indexStream = await _storage.GetStreamAsync(key, cancellationToken);
+        var indexDoc = await System.Text.Json.JsonDocument.ParseAsync(indexStream, cancellationToken: cancellationToken);
+
+        var referrers = new List<ReferrerDescriptor>();
+        if (indexDoc.RootElement.TryGetProperty("manifests", out var manifests))
+        {
+            foreach (var manifest in manifests.EnumerateArray())
+            {
+                var referrer = new ReferrerDescriptor
+                {
+                    MediaType = manifest.GetProperty("mediaType").GetString()!,
+                    Digest = manifest.GetProperty("digest").GetString()!,
+                    Size = manifest.GetProperty("size").GetInt64()
+                };
+
+                // Optional artifactType
+                if (manifest.TryGetProperty("artifactType", out var artifactTypeProp))
+                {
+                    referrer.ArtifactType = artifactTypeProp.GetString();
+                }
+
+                // Optional annotations
+                if (manifest.TryGetProperty("annotations", out var annotationsProp))
+                {
+                    referrer.Annotations = new Dictionary<string, string>();
+                    foreach (var annotation in annotationsProp.EnumerateObject())
+                    {
+                        referrer.Annotations[annotation.Name] = annotation.Value.GetString() ?? "";
+                    }
+                }
+
+                referrers.Add(referrer);
+            }
+        }
+
+        // Filter by artifact type if specified
+        if (!string.IsNullOrEmpty(artifactType))
+        {
+            referrers = referrers.Where(r => r.ArtifactType == artifactType).ToList();
+        }
+
+        return referrers;
+    }
+
+    public async Task UpdateReferrersIndexAsync(string name, string subjectDigest, ReferrerDescriptor referrer, CancellationToken cancellationToken = default)
+    {
+        // Check if referrers API is enabled
+        var enableReferrersApi = bool.Parse(_configuration?["Registry:EnableReferrersApi"] ?? "false");
+        if (!enableReferrersApi)
+        {
+            throw new InvalidOperationException("Referrers API is disabled. Enable it by setting Registry:EnableReferrersApi to true in configuration.");
+        }
+
+        // Validate repository name
+        if (!NameValidator.IsValidRepositoryName(name))
+        {
+            throw new InvalidNameException(name, "Invalid repository name format");
+        }
+
+        // Validate digest format
+        DigestValidator.ValidateDigest(subjectDigest);
+
+        // Build storage key for referrers index
+        var key = $"referrers/{name}/{subjectDigest}/index.json";
+
+        // Read existing index or create new one
+        var manifests = new List<object>();
+        
+        if (await _storage.ExistsAsync(key, cancellationToken))
+        {
+            var existingStream = await _storage.GetStreamAsync(key, cancellationToken);
+            var existingDoc = await System.Text.Json.JsonDocument.ParseAsync(existingStream, cancellationToken: cancellationToken);
+            
+            if (existingDoc.RootElement.TryGetProperty("manifests", out var existingManifests))
+            {
+                foreach (var manifest in existingManifests.EnumerateArray())
+                {
+                    // Convert to anonymous object for serialization
+                    var obj = new
+                    {
+                        mediaType = manifest.GetProperty("mediaType").GetString(),
+                        digest = manifest.GetProperty("digest").GetString(),
+                        size = manifest.GetProperty("size").GetInt64(),
+                        artifactType = manifest.TryGetProperty("artifactType", out var at) ? at.GetString() : null,
+                        annotations = manifest.TryGetProperty("annotations", out var ann) 
+                            ? ann.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()) 
+                            : null
+                    };
+                    manifests.Add(obj!);
+                }
+            }
+        }
+
+        // Add new referrer
+        var newReferrer = new
+        {
+            mediaType = referrer.MediaType,
+            digest = referrer.Digest,
+            size = referrer.Size,
+            artifactType = referrer.ArtifactType,
+            annotations = referrer.Annotations
+        };
+        manifests.Add(newReferrer);
+
+        // Create updated index
+        var index = new
+        {
+            schemaVersion = 2,
+            mediaType = "application/vnd.oci.image.index.v1+json",
+            manifests
+        };
+
+        // Serialize and store
+        var indexJson = System.Text.Json.JsonSerializer.Serialize(index, new System.Text.Json.JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        });
+        var indexBytes = System.Text.Encoding.UTF8.GetBytes(indexJson);
+
+        await _storage.PutAsync(key, indexBytes, "application/vnd.oci.image.index.v1+json", cancellationToken);
+    }
+
 }
+

@@ -181,9 +181,60 @@ public class ManifestsController : ControllerBase
                 "Manifest uploaded successfully: {Repository}@{Reference}, Digest={Digest}, Size={Size}, ContentType={ContentType}",
                 name, reference, digest, content.Length, contentType);
 
+            // Check if manifest has a subject field (for referrers API)
+            string? subjectDigest = null;
+            string? artifactType = null;
+            try
+            {
+                var manifestJson = System.Text.Json.JsonDocument.Parse(content);
+                if (manifestJson.RootElement.TryGetProperty("subject", out var subject))
+                {
+                    subjectDigest = subject.GetProperty("digest").GetString();
+                    
+                    if (!string.IsNullOrEmpty(subjectDigest))
+                    {
+                        _logger.LogInformation(
+                            "Manifest {Digest} references subject {SubjectDigest}",
+                            digest, subjectDigest);
+
+                        // Get artifact type if present
+                        if (manifestJson.RootElement.TryGetProperty("artifactType", out var artifactTypeProp))
+                        {
+                            artifactType = artifactTypeProp.GetString();
+                        }
+
+                        // Update referrers index
+                        var referrerDescriptor = new Core.Models.ReferrerDescriptor
+                        {
+                            MediaType = contentType,
+                            Digest = digest,
+                            Size = content.Length,
+                            ArtifactType = artifactType
+                        };
+
+                        await _registryService.UpdateReferrersIndexAsync(name, subjectDigest, referrerDescriptor, cancellationToken);
+                        
+                        _logger.LogInformation(
+                            "Updated referrers index for subject {SubjectDigest} with referrer {Digest}",
+                            subjectDigest, digest);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail the upload if referrers update fails
+                _logger.LogWarning(ex, "Failed to update referrers index for manifest {Digest}", digest);
+            }
+
             // Set OCI headers
             Response.Headers["Docker-Content-Digest"] = digest;
             Response.Headers["Location"] = $"/v2/{name}/manifests/{digest}";
+            
+            // Add OCI-Subject header if subject is present
+            if (!string.IsNullOrEmpty(subjectDigest))
+            {
+                Response.Headers["OCI-Subject"] = subjectDigest;
+            }
 
             return Created($"/v2/{name}/manifests/{digest}", null);
         }
