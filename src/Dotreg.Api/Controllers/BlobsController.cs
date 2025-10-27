@@ -15,10 +15,12 @@ namespace Dotreg.Api.Controllers;
 public class BlobsController : ControllerBase
 {
     private readonly IRegistryService _registryService;
+    private readonly ILogger<BlobsController> _logger;
 
-    public BlobsController(IRegistryService registryService)
+    public BlobsController(IRegistryService registryService, ILogger<BlobsController> logger)
     {
         _registryService = registryService ?? throw new ArgumentNullException(nameof(registryService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -30,9 +32,15 @@ public class BlobsController : ControllerBase
     [HttpGet("{digest}")]
     public async Task<IActionResult> GetBlob(string name, string digest, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Retrieving blob: {Repository}@{Digest}", name, digest);
+        
         try
         {
             var blob = await _registryService.GetBlobAsync(name, digest, cancellationToken);
+            
+            _logger.LogInformation(
+                "Blob retrieved successfully: {Repository}@{Digest}, Size={Size}",
+                name, digest, blob.Size);
 
             // Set OCI headers
             Response.Headers["Docker-Content-Digest"] = blob.Digest;
@@ -43,6 +51,7 @@ public class BlobsController : ControllerBase
         }
         catch (BlobNotFoundException ex)
         {
+            _logger.LogWarning(ex, "Blob not found: {Repository}@{Digest}", name, digest);
             return NotFound(new Models.OciErrorResponse
             {
                 Errors = new List<Models.ErrorDetail>
@@ -95,6 +104,8 @@ public class BlobsController : ControllerBase
     [HttpHead("{digest}")]
     public async Task<IActionResult> HeadBlob(string name, string digest, CancellationToken cancellationToken)
     {
+        _logger.LogDebug("Checking blob existence: {Repository}@{Digest}", name, digest);
+        
         try
         {
             var blob = await _registryService.GetBlobAsync(name, digest, cancellationToken);

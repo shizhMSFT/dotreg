@@ -14,10 +14,12 @@ namespace Dotreg.Api.Controllers;
 public class ManifestsController : ControllerBase
 {
     private readonly IRegistryService _registryService;
+    private readonly ILogger<ManifestsController> _logger;
 
-    public ManifestsController(IRegistryService registryService)
+    public ManifestsController(IRegistryService registryService, ILogger<ManifestsController> logger)
     {
         _registryService = registryService ?? throw new ArgumentNullException(nameof(registryService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -29,9 +31,15 @@ public class ManifestsController : ControllerBase
     [HttpGet("{**reference}")]
     public async Task<IActionResult> GetManifest(string name, string reference, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Retrieving manifest: {Repository}@{Reference}", name, reference);
+        
         try
         {
             var manifest = await _registryService.GetManifestAsync(name, reference, cancellationToken);
+            
+            _logger.LogInformation(
+                "Manifest retrieved successfully: {Repository}@{Reference}, Digest={Digest}, Size={Size}",
+                name, reference, manifest.Digest, manifest.Size);
 
             // Set OCI headers
             Response.Headers["Docker-Content-Digest"] = manifest.Digest;
@@ -41,6 +49,7 @@ public class ManifestsController : ControllerBase
         }
         catch (ManifestNotFoundException ex)
         {
+            _logger.LogWarning(ex, "Manifest not found: {Repository}@{Reference}", name, reference);
             return NotFound(new Models.OciErrorResponse
             {
                 Errors = new List<Models.ErrorDetail>
@@ -79,6 +88,8 @@ public class ManifestsController : ControllerBase
     [HttpHead("{**reference}")]
     public async Task<IActionResult> HeadManifest(string name, string reference, CancellationToken cancellationToken)
     {
+        _logger.LogDebug("Checking manifest existence: {Repository}@{Reference}", name, reference);
+        
         try
         {
             var manifest = await _registryService.GetManifestAsync(name, reference, cancellationToken);

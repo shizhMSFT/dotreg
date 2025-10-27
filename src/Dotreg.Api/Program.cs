@@ -65,6 +65,8 @@ if (app.Environment.IsDevelopment())
 // Add custom middleware
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ErrorHandlingMiddleware>();
+app.UseMiddleware<RepositoryNameValidationMiddleware>();
+app.UseMiddleware<DigestValidationMiddleware>();
 
 // Map controllers
 app.MapControllers();

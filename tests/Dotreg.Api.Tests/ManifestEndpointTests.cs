@@ -4,6 +4,7 @@ using Dotreg.Core.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -16,7 +17,8 @@ public class ManifestEndpointTests
 {
     private static ManifestsController CreateController(IRegistryService service)
     {
-        var controller = new ManifestsController(service)
+        var mockLogger = new Mock<ILogger<ManifestsController>>();
+        var controller = new ManifestsController(service, mockLogger.Object)
         {
             ControllerContext = new ControllerContext
             {
